@@ -1,0 +1,32 @@
+# Virtual Environment
+venv/
+**/venv/
+ENV/
+env/
+
+# Environment Variables & Secrets (CRITICAL: NEVER COMMIT)
+.env
+**/.env
+*.env
+
+# Vector Databases & Cached Models
+chroma_db/
+chroma_db_local/
+**/chroma_db/
+**/chroma_db_local/
+.cache/
+
+# Python Cache & Bytecode
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs & Temporary Files
+*.log
+.DS_Store
+**/.DS_Store
+
+# IDE Configurations
+.vscode/
+.idea/

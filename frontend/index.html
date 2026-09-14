@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Technical Interview Prep AI | Multi-Doc RAG</title>
+  <!-- Google Fonts & Font Awesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Marked.js for markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    :root {
+      --bg-main: #0b0f17;
+      --bg-card: #111827;
+      --bg-sidebar: #0e1420;
+      --bg-bubble-user: #2563eb;
+      --bg-bubble-ai: #1f2937;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent-primary: #3b82f6;
+      --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+      --accent-green: #10b981;
+      --font-main: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-code: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .app-container {
+      display: flex;
+      width: 100%;
+      height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 320px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: all 0.3s ease;
+    }
+
+    .sidebar-header {
+      padding: 24px 20px 16px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      background: var(--accent-gradient);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: white;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    }
+
+    .brand-info h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .badge-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--accent-green);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.9); }
+    }
+
+    .sidebar-content {
+      padding: 20px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Upload Section */
+    .upload-btn {
+      width: 100%;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px dashed rgba(59, 130, 246, 0.4);
+      color: #93c5fd;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      margin-bottom: 20px;
+      font-family: var(--font-main);
+    }
+
+    .upload-btn:hover {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: #3b82f6;
+      transform: translateY(-1px);
+    }
+
+    .doc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 24px;
+    }
+
+    .doc-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: #e5e7eb;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      padding: 8px 12px;
+      border-radius: 8px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .doc-item i {
+      color: #ef4444;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .quick-topic-btn {
+      width: 100%;
+      text-align: left;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+      font-family: var(--font-main);
+    }
+
+    .quick-topic-btn:hover {
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.4);
+      color: #93c5fd;
+      transform: translateX(3px);
+    }
+
+    .quick-topic-btn i {
+      font-size: 14px;
+      color: var(--accent-primary);
+      width: 16px;
+    }
+
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .clear-btn {
+      background: none;
+      border: none;
+      color: #ef4444;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+
+    .clear-btn:hover {
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    /* Chat Area */
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: relative;
+      background: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.05), transparent 70%);
+    }
+
+    .chat-header {
+      height: 65px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: rgba(11, 15, 23, 0.8);
+      backdrop-filter: blur(12px);
+      z-index: 10;
+    }
+
+    .chat-header-title {
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chat-header-badge {
+      background: rgba(59, 130, 246, 0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .messages-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      scroll-behavior: smooth;
+    }
+
+    .welcome-hero {
+      max-width: 650px;
+      margin: 30px auto;
+      text-align: center;
+      padding: 32px 24px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+    }
+
+    .hero-icon {
+      width: 64px;
+      height: 64px;
+      background: var(--accent-gradient);
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      color: white;
+      margin: 0 auto 16px;
+      box-shadow: 0 8px 24px rgba(59, 130, 246, 0.35);
+    }
+
+    .welcome-hero h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .welcome-hero p {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    /* Message Bubbles */
+    .message-row {
+      display: flex;
+      gap: 14px;
+      max-width: 840px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .message-row.user {
+      flex-direction: row-reverse;
+    }
+
+    .avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 16px;
+    }
+
+    .avatar.user {
+      background: #4f46e5;
+      color: white;
+    }
+
+    .avatar.ai {
+      background: var(--accent-gradient);
+      color: white;
+      box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
+    }
+
+    .bubble-wrapper {
+      display: flex;
+      flex-direction: column;
+      max-width: calc(100% - 54px);
+    }
+
+    .message-bubble {
+      padding: 14px 18px;
+      border-radius: 16px;
+      font-size: 14.5px;
+      line-height: 1.65;
+      position: relative;
+    }
+
+    .message-row.user .message-bubble {
+      background: var(--bg-bubble-user);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-row.ai .message-bubble {
+      background: var(--bg-bubble-ai);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .message-bubble p {
+      margin-bottom: 12px;
+    }
+    .message-bubble p:last-child {
+      margin-bottom: 0;
+    }
+
+    .message-bubble strong {
+      color: #93c5fd;
+      font-weight: 600;
+    }
+
+    .message-bubble ul, .message-bubble ol {
+      margin: 8px 0 12px 20px;
+    }
+
+    .message-bubble li {
+      margin-bottom: 6px;
+    }
+
+    .message-bubble code {
+      font-family: var(--font-code);
+      background: rgba(0, 0, 0, 0.35);
+      padding: 2px 6px;
+      border-radius: 5px;
+      font-size: 13px;
+      color: #f472b6;
+    }
+
+    .message-bubble pre {
+      background: #090d16;
+      border: 1px solid var(--border-color);
+      padding: 14px;
+      border-radius: 10px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+
+    .message-bubble pre code {
+      background: none;
+      padding: 0;
+      color: #e5e7eb;
+      font-size: 13px;
+    }
+
+    /* Sources Badges */
+    .sources-container {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .source-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-right: 4px;
+    }
+
+    .source-tag {
+      background: rgba(59, 130, 246, 0.12);
+      color: #bfdbfe;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .source-tag i {
+      font-size: 10px;
+      color: #60a5fa;
+    }
+
+    .bubble-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 6px;
+      padding: 0 4px;
+    }
+
+    .copy-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.2s;
+    }
+
+    .copy-btn:hover {
+      color: var(--text-main);
+    }
+
+    /* Typing Indicator */
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 12px;
+    }
+
+    .typing-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #9ca3af;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 90px;
+      right: 24px;
+      background: #1e293b;
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: white;
+      padding: 12px 18px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13.5px;
+      z-index: 100;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Input Box */
+    .input-wrapper {
+      padding: 16px 24px 24px;
+      max-width: 840px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .input-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 8px 14px;
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+      transition: border-color 0.2s;
+    }
+
+    .input-box:focus-within {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    textarea {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--text-main);
+      font-family: var(--font-main);
+      font-size: 14.5px;
+      line-height: 1.5;
+      resize: none;
+      max-height: 160px;
+      min-height: 24px;
+      padding: 6px 0;
+    }
+
+    textarea::placeholder {
+      color: #6b7280;
+    }
+
+    .send-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: var(--accent-gradient);
+      border: none;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .send-btn:hover:not(:disabled) {
+      transform: scale(1.05);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.5);
+    }
+
+    .send-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .input-hint {
+      text-align: center;
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-icon">
+          <i class="fa-solid fa-brain"></i>
+        </div>
+        <div class="brand-info">
+          <h1>Interview RAG</h1>
+          <div class="badge-status">
+            <span class="badge-dot"></span>
+            <span id="docCountBadge">Active Notes</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-content">
+        <!-- PDF Upload Button -->
+        <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;" onchange="handleFileUpload(event)" />
+        <button class="upload-btn" onclick="document.getElementById('pdfFileInput').click()">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <span>Upload New PDF Notes</span>
+        </button>
+
+        <div class="section-title">
+          <span>Active Documents</span>
+          <i class="fa-solid fa-rotate-right" style="cursor: pointer;" onclick="fetchDocuments()" title="Refresh"></i>
+        </div>
+        <div class="doc-list" id="docList">
+          <div class="doc-item"><i class="fa-solid fa-file-pdf"></i> Loading...</div>
+        </div>
+
+        <div class="section-title">Common Topics</div>
+        
+        <button class="quick-topic-btn" onclick="askQuick('What are ACID properties in DBMS?')">
+          <i class="fa-solid fa-atom"></i>
+          <span>ACID Properties</span>
+        </button>
+
+        <button class="quick-topic-btn" onclick="askQuick('Difference between Primary Key and Unique Key?')">
+          <i class="fa-solid fa-key"></i>
+          <span>Primary vs Unique Key</span>
+        </button>
+
+        <button class="quick-topic-btn" onclick="askQuick('Explain Normalization and 1NF, 2NF, 3NF, BCNF.')">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>Database Normalization</span>
+        </button>
+
+        <button class="quick-topic-btn" onclick="askQuick('Explain Indexing and B-Trees vs B+ Trees.')">
+          <i class="fa-solid fa-diagram-project"></i>
+          <span>Indexing & B+ Trees</span>
+        </button>
+
+        <button class="quick-topic-btn" onclick="askQuick('What is a Deadlock and how to prevent it in DBMS?')">
+          <i class="fa-solid fa-lock"></i>
+          <span>Deadlocks & Prevention</span>
+        </button>
+
+        <button class="quick-topic-btn" onclick="askQuick('What is the difference between SQL and NoSQL databases?')">
+          <i class="fa-solid fa-table-cells-large"></i>
+          <span>SQL vs NoSQL</span>
+        </button>
+      </div>
+
+      <div class="sidebar-footer">
+        <span>FastAPI + Groq + Chroma</span>
+        <button class="clear-btn" onclick="clearChat()">
+          <i class="fa-regular fa-trash-can"></i> Clear
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Chat Container -->
+    <main class="chat-container">
+      <header class="chat-header">
+        <div class="chat-header-title">
+          <span>Technical Interview RAG Mentor</span>
+          <span class="chat-header-badge" id="headerDocCount">Multi-Document RAG</span>
+        </div>
+      </header>
+
+      <div class="messages-area" id="messagesArea">
+        <div class="welcome-hero" id="welcomeHero">
+          <div class="hero-icon">
+            <i class="fa-solid fa-graduation-cap"></i>
+          </div>
+          <h2>Technical Interview Preparation AI</h2>
+          <p>
+            Your interview notes are parsed, chunked, and indexed with local vector search. Ask any technical question, or upload more PDFs (OS, Networks, System Design) from the sidebar!
+          </p>
+        </div>
+      </div>
+
+      <div class="input-wrapper">
+        <div class="input-box">
+          <textarea 
+            id="questionInput" 
+            placeholder="Ask an interview question (e.g. 'Explain ACID properties with real-world examples')..." 
+            rows="1"
+            onkeydown="handleKeyDown(event)"
+            oninput="autoResize(this)"
+          ></textarea>
+          <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+            <i class="fa-solid fa-arrow-up"></i>
+          </button>
+        </div>
+        <div class="input-hint">
+          Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for a new line.
+        </div>
+      </div>
+    </main>
+
+    <div class="toast" id="toast">
+      <i class="fa-solid fa-circle-notch fa-spin" id="toastIcon"></i>
+      <span id="toastMsg">Processing document...</span>
+    </div>
+
+  </div>
+
+  <script>
+    const messagesArea = document.getElementById('messagesArea');
+    const questionInput = document.getElementById('questionInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const welcomeHero = document.getElementById('welcomeHero');
+    const docList = document.getElementById('docList');
+    const docCountBadge = document.getElementById('docCountBadge');
+    const headerDocCount = document.getElementById('headerDocCount');
+    const toast = document.getElementById('toast');
+    const toastMsg = document.getElementById('toastMsg');
+    const toastIcon = document.getElementById('toastIcon');
+
+    const BASE_URL = window.location.origin.includes('8000') 
+      ? window.location.origin 
+      : 'http://127.0.0.1:8000';
+
+    // Fetch loaded documents on load
+    fetchDocuments();
+
+    function autoResize(textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    }
+
+    function askQuick(topic) {
+      questionInput.value = topic;
+      sendMessage();
+    }
+
+    function clearChat() {
+      messagesArea.innerHTML = '';
+      if (welcomeHero) {
+        messagesArea.appendChild(welcomeHero);
+      }
+    }
+
+    function showToast(msg, isSpinning = true, duration = 0) {
+      toastMsg.textContent = msg;
+      toastIcon.className = isSpinning 
+        ? 'fa-solid fa-circle-notch fa-spin' 
+        : 'fa-solid fa-check';
+      toast.classList.add('show');
+      if (duration > 0) {
+        setTimeout(() => { toast.classList.remove('show'); }, duration);
+      }
+    }
+
+    function hideToast() {
+      toast.classList.remove('show');
+    }
+
+    async function fetchDocuments() {
+      try {
+        const res = await fetch(`${BASE_URL}/documents`);
+        const data = await res.json();
+        if (data.documents && data.documents.length > 0) {
+          docList.innerHTML = data.documents.map(d => `
+            <div class="doc-item" title="${d}">
+              <i class="fa-solid fa-file-pdf"></i>
+              <span>${d}</span>
+            </div>
+          `).join('');
+          docCountBadge.textContent = `${data.documents.length} PDF(s) Loaded`;
+          headerDocCount.textContent = `${data.documents.length} Document(s) Active`;
+        } else {
+          docList.innerHTML = '<div class="doc-item"><i class="fa-solid fa-info-circle"></i> No PDFs yet</div>';
+        }
+      } catch (err) {
+        docList.innerHTML = '<div class="doc-item"><i class="fa-solid fa-triangle-exclamation"></i> Offline</div>';
+      }
+    }
+
+    async function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      showToast(`Uploading & indexing ${file.name}...`, true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch(`${BASE_URL}/upload`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`Indexed ${data.pages} pages (${data.chunks} chunks)!`, false, 4000);
+          fetchDocuments();
+        } else {
+          showToast(`Upload failed: ${data.detail}`, false, 4000);
+        }
+      } catch (err) {
+        showToast('Upload failed: Server connection error', false, 4000);
+      } finally {
+        event.target.value = '';
+      }
+    }
+
+    async function sendMessage() {
+      const query = questionInput.value.trim();
+      if (!query) return;
+
+      if (welcomeHero && welcomeHero.parentNode) {
+        welcomeHero.parentNode.removeChild(welcomeHero);
+      }
+
+      appendMessage('user', query);
+      questionInput.value = '';
+      questionInput.style.height = 'auto';
+      questionInput.disabled = true;
+      sendBtn.disabled = true;
+
+      const loadingId = appendLoading();
+      scrollToBottom();
+
+      try {
+        const response = await fetch(`${BASE_URL}/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: query })
+        });
+
+        const data = await response.json();
+        removeLoading(loadingId);
+
+        if (response.ok && data.answer) {
+          appendMessage('ai', data.answer, data.sources || []);
+        } else {
+          appendMessage('ai', `❌ Error: ${data.detail || 'Could not retrieve answer.'}`);
+        }
+      } catch (err) {
+        removeLoading(loadingId);
+        appendMessage('ai', `❌ Connection Error: Could not connect to FastAPI server at ${BASE_URL}. Make sure 'python app.py' is running.`);
+      } finally {
+        questionInput.disabled = false;
+        sendBtn.disabled = false;
+        questionInput.focus();
+        scrollToBottom();
+      }
+    }
+
+    function appendMessage(role, text, sources = []) {
+      const row = document.createElement('div');
+      row.className = `message-row ${role}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = `avatar ${role}`;
+      avatar.innerHTML = role === 'user' 
+        ? '<i class="fa-solid fa-user"></i>' 
+        : '<i class="fa-solid fa-robot"></i>';
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'bubble-wrapper';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+
+      if (role === 'ai') {
+        bubble.innerHTML = typeof marked !== 'undefined' ? marked.parse(text) : escapeHtml(text);
+        
+        // Add sources if available
+        if (sources && sources.length > 0) {
+          const sourcesContainer = document.createElement('div');
+          sourcesContainer.className = 'sources-container';
+          sourcesContainer.innerHTML = `
+            <span class="source-label"><i class="fa-solid fa-bookmark"></i> Sources:</span>
+            ${sources.map(s => `<span class="source-tag"><i class="fa-solid fa-file-pdf"></i> ${escapeHtml(s)}</span>`).join('')}
+          `;
+          bubble.appendChild(sourcesContainer);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'bubble-actions';
+        actions.innerHTML = `
+          <button class="copy-btn" onclick="copyText(this, \`${escapeJsString(text)}\`)">
+            <i class="fa-regular fa-copy"></i> Copy answer
+          </button>
+        `;
+        wrapper.appendChild(bubble);
+        wrapper.appendChild(actions);
+      } else {
+        bubble.textContent = text;
+        wrapper.appendChild(bubble);
+      }
+
+      row.appendChild(avatar);
+      row.appendChild(wrapper);
+      messagesArea.appendChild(row);
+      scrollToBottom();
+    }
+
+    function appendLoading() {
+      const id = 'loading-' + Date.now();
+      const row = document.createElement('div');
+      row.className = 'message-row ai';
+      row.id = id;
+
+      row.innerHTML = `
+        <div class="avatar ai"><i class="fa-solid fa-robot"></i></div>
+        <div class="bubble-wrapper">
+          <div class="message-bubble">
+            <div class="typing-indicator">
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+              <div class="typing-dot"></div>
+            </div>
+          </div>
+        </div>
+      `;
+      messagesArea.appendChild(row);
+      return id;
+    }
+
+    function removeLoading(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+
+    function scrollToBottom() {
+      messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+
+    function copyText(btn, text) {
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+        setTimeout(() => { btn.innerHTML = orig; }, 2000);
+      });
+    }
+
+    function escapeHtml(string) {
+      return String(string).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function escapeJsString(str) {
+      return str.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+    }
+  </script>
+</body>
+</html>
