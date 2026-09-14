@@ -117,7 +117,9 @@ def handle_ask_question(payload: QuestionRequest):
 # Run server directly with `python app.py`
 # ----------------------------------------------------
 if __name__ == "__main__":
-    print("🚀 Starting FastAPI server on http://127.0.0.1:8000 ...")
-    print("💻 Web Chat UI available at: http://127.0.0.1:8000")
-    print("📖 Interactive Swagger API Docs at: http://127.0.0.1:8000/docs")
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
+    import os
+    port = int(os.environ.get("PORT", 8000))
+    print(f"🚀 Starting FastAPI server on port {port}...")
+    print(f"💻 Web Chat UI available at: http://127.0.0.1:{port}")
+    print(f"📖 Interactive Swagger API Docs at: http://127.0.0.1:{port}/docs")
+    uvicorn.run("app:app", host="0.0.0.0", port=port, reload=False)

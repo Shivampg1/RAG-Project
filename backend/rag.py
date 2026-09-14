@@ -1,5 +1,6 @@
 import os
 import sys
+import gc
 import json
 import urllib.request
 import traceback
@@ -12,14 +13,13 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent
 ENV_PATH = BASE_DIR / ".env"
 DOCS_DIR = BASE_DIR / "documents"
-PDF_PATH = DOCS_DIR / "DBMS_Notes.pdf"
 CHROMA_PATH = BASE_DIR / "chroma_db_local"
 LOG_PATH = BASE_DIR / "error.log"
 
 load_dotenv(ENV_PATH)
 
 print("=" * 60)
-print("🚀 Starting DBMS Interview RAG Assistant (Groq + Local Embeddings)...")
+print("🚀 Starting DBMS Interview RAG Assistant (Memory-Optimized)...")
 print("=" * 60)
 
 # 1. Check Groq API Key
@@ -31,14 +31,13 @@ if not groq_api_key:
         os.environ["GROQ_API_KEY"] = alt_key
 
 if not groq_api_key:
-    print("\n❌ ERROR: 'GROQ_API_KEY' was not found in your .env file!")
-    print(f"Please check your .env file at: {ENV_PATH}")
-    print("Ensure it contains: GROQ_API_KEY=gsk_...\n")
+    print("\n❌ ERROR: 'GROQ_API_KEY' was not found in your environment or .env!")
+    print("Ensure GROQ_API_KEY is set in Render Environment Variables.\n")
     sys.exit(1)
 else:
-    print("✅ Found GROQ_API_KEY in .env")
+    print("✅ Found GROQ_API_KEY")
 
-# 2. Check PDF exists
+# 2. Ensure Documents Directory Exists
 if not DOCS_DIR.exists():
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -87,11 +86,10 @@ try:
     from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 except ImportError as e:
     print(f"\n❌ Missing package: {e}")
-    print("👉 Run: pip install langchain-groq python-multipart\n")
     sys.exit(1)
 
 # ----------------------------------------------------
-# 100% Free Local Embeddings
+# 100% Free Local Embeddings (Peak Memory Safe)
 # ----------------------------------------------------
 class LocalEmbeddings(Embeddings):
     """Local embeddings powered by Chroma's built-in ONNX model (all-MiniLM-L6-v2)."""
@@ -110,6 +108,7 @@ try:
     embeddings = LocalEmbeddings()
 
     def get_vectorstore():
+        # If ChromaDB already exists on disk, load it directly
         if CHROMA_PATH.exists() and len(os.listdir(CHROMA_PATH)) > 0:
             print("⚡ Loading existing local ChromaDB (ready instantly)...")
             return Chroma(
@@ -117,31 +116,49 @@ try:
                 embedding_function=embeddings
             )
         
-        # Initial index if documents exist
+        # Initialize empty Chroma vectorstore
+        print("🌱 Initializing local ChromaDB...")
+        vs = Chroma(
+            persist_directory=str(CHROMA_PATH),
+            embedding_function=embeddings
+        )
+
         pdf_files = list(DOCS_DIR.glob("*.pdf"))
         if not pdf_files:
             print("ℹ️ No initial PDFs found in documents folder.")
-            return Chroma(
-                persist_directory=str(CHROMA_PATH),
-                embedding_function=embeddings
-            )
+            return vs
 
-        print(f"⏳ Reading {len(pdf_files)} initial PDF(s) and creating local ChromaDB...")
-        all_chunks = []
+        # Stream and batch process initial PDFs to stay well under 512MB RAM
+        print(f"⏳ Indexing {len(pdf_files)} initial PDF(s) with memory-safe streaming...")
+        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        BATCH_SIZE = 25
+
         for pdf_file in pdf_files:
+            print(f"   Processing {pdf_file.name}...")
             loader = PyPDFLoader(str(pdf_file))
-            documents = loader.load()
-            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            chunks = splitter.split_documents(documents)
-            all_chunks.extend(chunks)
-        
-        vectorstore = Chroma.from_documents(
-            documents=all_chunks,
-            embedding=embeddings,
-            persist_directory=str(CHROMA_PATH)
-        )
-        print("✅ Local Vector database created!")
-        return vectorstore
+            current_batch = []
+            page_count = 0
+
+            # lazy_load streams one page at a time (never keeps 300+ pages in memory!)
+            for page in loader.lazy_load():
+                page_count += 1
+                page_chunks = splitter.split_documents([page])
+                current_batch.extend(page_chunks)
+
+                if len(current_batch) >= BATCH_SIZE:
+                    vs.add_documents(current_batch)
+                    current_batch = []
+                    gc.collect()
+
+            if current_batch:
+                vs.add_documents(current_batch)
+                del current_batch
+                gc.collect()
+
+            print(f"   ✅ Finished {pdf_file.name} ({page_count} pages).")
+
+        print("✅ Local Vector database created safely within memory limits!")
+        return vs
 
     vectorstore = get_vectorstore()
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -179,7 +196,6 @@ def ask_question(question: str) -> dict:
         docs = retriever.invoke(question)
         context = "\n\n".join(doc.page_content for doc in docs)
         
-        # Extract unique sources with page numbers
         sources = []
         for doc in docs:
             src = doc.metadata.get("source", "Unknown")
@@ -202,28 +218,45 @@ def ask_question(question: str) -> dict:
         }
 
 def add_pdf_to_vectorstore(file_path: str) -> dict:
-    """Loads a newly uploaded PDF, splits into chunks, and adds to Chroma vector database."""
+    """Loads a newly uploaded PDF with streaming and batching to prevent memory spikes."""
     global vectorstore, retriever
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
-    print(f"\n📥 Indexing newly uploaded document: {path.name}...")
+    print(f"\n📥 Memory-safe indexing for: {path.name}...")
     loader = PyPDFLoader(str(path))
-    documents = loader.load()
-
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    chunks = splitter.split_documents(documents)
 
-    vectorstore.add_documents(chunks)
-    # Refresh retriever to include new documents
+    BATCH_SIZE = 25
+    current_batch = []
+    total_pages = 0
+    total_chunks = 0
+
+    for page in loader.lazy_load():
+        total_pages += 1
+        page_chunks = splitter.split_documents([page])
+        total_chunks += len(page_chunks)
+        current_batch.extend(page_chunks)
+
+        if len(current_batch) >= BATCH_SIZE:
+            vectorstore.add_documents(current_batch)
+            current_batch = []
+            gc.collect()
+
+    if current_batch:
+        vectorstore.add_documents(current_batch)
+        del current_batch
+        gc.collect()
+
+    # Refresh retriever to include new chunks
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-    print(f"✅ Successfully indexed {len(documents)} pages ({len(chunks)} chunks) from {path.name}!")
+    print(f"✅ Successfully indexed {total_pages} pages ({total_chunks} chunks) from {path.name}!")
 
     return {
         "filename": path.name,
-        "pages": len(documents),
-        "chunks": len(chunks)
+        "pages": total_pages,
+        "chunks": total_chunks
     }
 
 def get_loaded_documents() -> list[str]:
