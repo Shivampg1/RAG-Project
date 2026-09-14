@@ -9,13 +9,6 @@ env/
 **/.env
 *.env
 
-# Vector Databases & Cached Models
-chroma_db/
-chroma_db_local/
-**/chroma_db/
-**/chroma_db_local/
-.cache/
-
 # Python Cache & Bytecode
 __pycache__/
 **/__pycache__/
